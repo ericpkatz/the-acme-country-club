@@ -1,44 +1,54 @@
-const Sequelize = require('sequelize');
-const { UUID, UUIDV4, STRING } = Sequelize;
-const conn = new Sequelize(process.env.DATABASE_URL || 'postgres://localhost/acme_country_club_2207');
+const { conn, Member, Booking, Facility } = require('./db');
+const express = require('express');
+const app = express();
 
-
-const Member = conn.define('member', {
-  id: {
-    primaryKey: true,
-    type: UUID,
-    defaultValue: UUIDV4
-  },
-  name: {
-    type: STRING(20),
-    allowNull: false,
-    unique: true
+app.get('/api/members', async(req, res, next)=> {
+  try {
+    const members = await Member.findAll({
+      include: [ 
+        { model: Member, as: 'sponsor'},
+        { model: Member, as: 'sponsored'},
+      ]
+    });
+    res.send(members);
+  }
+  catch(ex){
+    next(ex);
   }
 });
 
-
-const Booking = conn.define('booking', {
-  id: {
-    primaryKey: true,
-    type: UUID,
-    defaultValue: UUIDV4
+app.get('/api/bookings', async(req, res, next)=> {
+  try {
+    const bookings = await Booking.findAll({
+      include: [ 
+        { model: Member, as: 'booker' }
+      ]
+    });
+    res.send(bookings);
+  }
+  catch(ex){
+    next(ex);
   }
 });
 
-const Facility = conn.define('facility', {
-  id: {
-    primaryKey: true,
-    type: UUID,
-    defaultValue: UUIDV4
-  },
-  name: {
-    type: STRING(20),
-    allowNull: false
+app.get('/api/facilities', async(req, res, next)=> {
+  try {
+    const facilities = await Facility.findAll({
+      include: [ 
+        {
+          model: Booking,
+          include: [
+            { model: Member, as: 'booker' }
+          ]
+        } 
+      ]
+    });
+    res.send(facilities);
+  }
+  catch(ex){
+    next(ex);
   }
 });
-Member.belongsTo(Member, { as: 'sponsor' });
-Booking.belongsTo(Facility);
-Booking.belongsTo(Member, { as: 'booker'});
 
 
 const start = async()=> {
@@ -46,7 +56,7 @@ const start = async()=> {
     await conn.sync({ force: true });
     console.log('starting');
     const [moe, lucy, larry, ethyl] = await Promise.all(
-      ['moe', 'lucy', 'larry', 'ethyl'].map( name => Member.create({ name }))
+      ['moe', 'lucy', 'larry', 'ethyl', 'curly', 'fred'].map( name => Member.create({ name }))
     );
     const [tennis, pingPong, marbles] = await Promise.all(
       ['tennis', 'pingPong', 'marbles'].map( name => Facility.create({ name }))
@@ -64,6 +74,8 @@ const start = async()=> {
       Booking.create({ facilityId: marbles.id, bookerId: moe.id }),
       Booking.create({ facilityId: tennis.id, bookerId: larry.id }),
     ]);
+    const port = process.env.PORT || 3000;
+    app.listen(port, ()=> console.log(`listening on port ${port}`));
   }
   catch(ex){
     console.log(ex);
